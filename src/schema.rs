@@ -1,8 +1,9 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    projects (id) {
+    images (id) {
         id -> Uuid,
-        name -> Varchar,
+        image -> Varchar,
+        tag -> Varchar,
     }
 }

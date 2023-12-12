@@ -17,8 +17,7 @@ async fn main() {
     let pool = db_pool(&db_url).await;
 
     let app = Router::new()
-        .route("/projects/:project_id", get(routes::projects::show_project))
-        .route("/projects", post(routes::projects::create_project))
+        .route("/update/:image/:tag", post(routes::images::create_image))
         .with_state(pool);
 
     axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())

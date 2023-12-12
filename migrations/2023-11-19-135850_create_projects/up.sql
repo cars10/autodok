@@ -1,6 +1,7 @@
 -- Your SQL goes here
-CREATE TABLE projects (
+CREATE TABLE images (
     id uuid DEFAULT gen_random_uuid (),
-    name VARCHAR NOT NULL,
+    image VARCHAR NOT NULL,
+    tag VARCHAR NOT NULL,
     PRIMARY KEY (id)
 );

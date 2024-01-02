@@ -11,7 +11,7 @@ async fn main() {
 
     let docker = Docker::connect_with_local_defaults().unwrap();
     let app = Router::new()
-        .route("/update/:image", post(routes::update_image))
+        .route("/update/:image/:container", post(routes::update_image))
         .with_state(docker);
 
     axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())

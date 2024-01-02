@@ -29,43 +29,17 @@ pub async fn stop_start_container(docker: &Docker, container: String) {
         platform: info.platform,
     });
 
-    let config = info.config.unwrap();
+    let container_config = info.config.unwrap();
     let network_config = NetworkingConfig {
         endpoints_config: info.network_settings.unwrap().networks.unwrap(),
     };
 
-    let start_config = Config {
-        hostname: config.hostname,
-        domainname: config.domainname,
-        user: config.user,
-        attach_stdin: config.attach_stdin,
-        attach_stdout: config.attach_stdout,
-        attach_stderr: config.attach_stderr,
-        exposed_ports: config.exposed_ports,
-        tty: config.tty,
-        open_stdin: config.open_stdin,
-        stdin_once: config.stdin_once,
-        env: config.env,
-        cmd: config.cmd,
-        healthcheck: config.healthcheck,
-        args_escaped: None,
-        image: config.image,
-        volumes: config.volumes,
-        working_dir: config.working_dir,
-        entrypoint: config.entrypoint,
-        network_disabled: config.network_disabled,
-        mac_address: config.mac_address,
-        on_build: config.on_build,
-        labels: config.labels,
-        stop_signal: config.stop_signal,
-        stop_timeout: config.stop_timeout,
-        shell: config.shell,
-        host_config: info.host_config,
-        networking_config: Some(network_config),
-    };
+    let mut config = Config::from(container_config);
+    config.host_config = info.host_config;
+    config.networking_config = Some(network_config);
 
     docker
-        .create_container(options, start_config)
+        .create_container(options, config)
         .await
         .unwrap();
 

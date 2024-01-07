@@ -1,15 +1,8 @@
 version: '3'
 
 services:
-  db:
-    image: postgres:15
-    container_name: $PROJECT-db
-    environment:
-      POSTGRES_PASSWORD: $PGPASSWORD
-    volumes:
-      - psql_data:/var/lib/postgresql/data
+  autodok:
+    build: .
+    container_name: autodok
     ports:
-      - 127.0.0.1:5432:5432
-
-volumes:
-  psql_data:
+      - 127.0.0.1:3000:3000

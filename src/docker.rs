@@ -38,10 +38,7 @@ pub async fn stop_start_container(docker: &Docker, container: String) {
     config.host_config = info.host_config;
     config.networking_config = Some(network_config);
 
-    docker
-        .create_container(options, config)
-        .await
-        .unwrap();
+    docker.create_container(options, config).await.unwrap();
 
     docker
         .start_container(&container, None::<StartContainerOptions<String>>)

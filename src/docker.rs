@@ -17,9 +17,12 @@ pub async fn pull_image(docker: &Docker, image: String) {
     println!("Image pull done.");
 }
 
-pub async fn stop_start_container(docker: &Docker, container: String) {
+pub async fn stop_start_container(
+    docker: &Docker,
+    container: String,
+) -> Result<(), crate::AutodokError> {
     println!("Container: {:?}", &container);
-    let info = docker.inspect_container(&container, None).await.unwrap();
+    let info = docker.inspect_container(&container, None).await?;
 
     docker.stop_container(&container, None).await.unwrap();
     docker.remove_container(&container, None).await.unwrap();
@@ -44,4 +47,6 @@ pub async fn stop_start_container(docker: &Docker, container: String) {
         .start_container(&container, None::<StartContainerOptions<String>>)
         .await
         .unwrap();
+
+    Ok(())
 }

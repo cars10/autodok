@@ -1,27 +1,34 @@
+use crate::error::AutodokError;
 use bollard::{
     container::{Config, CreateContainerOptions, NetworkingConfig, StartContainerOptions},
     image::CreateImageOptions,
+    service::CreateImageInfo,
     Docker,
 };
 use futures_util::stream::StreamExt;
+use log::info;
 
-pub async fn pull_image(docker: &Docker, image: String) {
-    println!("Starting to pull image {image}");
+pub async fn pull_image(docker: &Docker, image: String) -> Result<(), AutodokError> {
+    info!("Starting to pull image {image}");
     let options = Some(CreateImageOptions {
         from_image: image,
         ..Default::default()
     });
 
     let mut stream = docker.create_image(options, None, None);
-    while stream.next().await.is_some() {}
-    println!("Image pull done.");
+    while let Some(res) = stream.next().await {
+        let info: CreateImageInfo = res?;
+        info!("{info:?}");
+    }
+    info!("Image pull done.");
+    Ok(())
 }
 
 pub async fn stop_start_container(
     docker: &Docker,
     container: String,
 ) -> Result<(), crate::AutodokError> {
-    println!("Container: {:?}", &container);
+    info!("Container: {:?}", &container);
     let info = docker.inspect_container(&container, None).await?;
 
     docker.stop_container(&container, None).await.unwrap();

@@ -42,6 +42,11 @@ impl From<BolladError> for AutodokError {
     }
 }
 
+struct ApiResponse {
+    status_code: StatusCode,
+    message: String,
+}
+
 impl IntoResponse for AutodokError {
     fn into_response(self) -> Response {
         let (status_code, message) = match self {

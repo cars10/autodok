@@ -13,7 +13,7 @@ pub async fn update_image(
 ) -> Result<Response, AutodokError> {
     docker.inspect_container(&container, None).await?;
 
-    crate::docker::pull_image(&docker, image.clone()).await;
+    crate::docker::pull_image(&docker, image.clone()).await?;
     crate::docker::stop_start_container(&docker, container).await;
 
     Ok(((StatusCode::OK, "läuft".to_string())).into_response())

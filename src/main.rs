@@ -19,10 +19,8 @@ async fn run() -> Result<(), AutodokError> {
         .route("/update/:image/:container", post(routes::update_image))
         .with_state(docker);
 
-    axum::Server::bind(&"0.0.0.0:3000".parse().unwrap())
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    axum::serve(listener, app).await.unwrap();
 
     Ok(())
 }

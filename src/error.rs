@@ -1,15 +1,29 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bollard::errors::Error as BolladError;
-use serde_json::json;
+use serde::Serialize;
 use std::error::Error;
 use std::fmt;
 
 #[derive(Debug)]
 pub enum AutodokError {
     DockerError(BolladError),
-    DockerResponseServerError { status_code: u16, message: String },
+    DockerResponseServerError {
+        status_code: StatusCode,
+        message: String,
+    },
     GenericError(String),
+}
+
+impl AutodokError {
+    fn from_bollard(code: u16, message: String) -> Self {
+        let status_code = StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
+        Self::DockerResponseServerError {
+            status_code,
+            message,
+        }
+    }
 }
 
 impl Error for AutodokError {}
@@ -33,17 +47,14 @@ impl From<BolladError> for AutodokError {
             BolladError::DockerResponseServerError {
                 status_code,
                 message,
-            } => AutodokError::DockerResponseServerError {
-                status_code,
-                message,
-            },
-            _ => AutodokError::GenericError("yolo".to_string()),
+            } => AutodokError::from_bollard(status_code, message),
+            _ => AutodokError::DockerError(err),
         }
     }
 }
 
-struct ApiResponse {
-    status_code: StatusCode,
+#[derive(Debug, Serialize)]
+struct Msg {
     message: String,
 }
 
@@ -57,13 +68,14 @@ impl IntoResponse for AutodokError {
             AutodokError::DockerResponseServerError {
                 status_code,
                 message,
-            } => (StatusCode::NOT_FOUND, message),
+            } => (status_code, message),
             AutodokError::GenericError(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "something else went wrong".to_string(),
             ),
         };
 
-        (status_code, json!({"message": message}).to_string()).into_response()
+        let msg = Msg { message };
+        (status_code, serde_json::to_string(&msg).unwrap()).into_response()
     }
 }

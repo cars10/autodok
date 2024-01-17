@@ -31,10 +31,10 @@ pub async fn stop_start_container(
     info!("Container: {:?}", &container);
     let info = docker.inspect_container(&container, None).await?;
 
-    docker.stop_container(&container, None).await.unwrap();
-    docker.remove_container(&container, None).await.unwrap();
+    docker.stop_container(&container, None).await?;
+    docker.remove_container(&container, None).await?;
 
-    let options = Some(CreateContainerOptions {
+    let create_options = Some(CreateContainerOptions {
         name: container.clone(),
         platform: info.platform,
     });
@@ -48,12 +48,11 @@ pub async fn stop_start_container(
     config.host_config = info.host_config;
     config.networking_config = Some(network_config);
 
-    docker.create_container(options, config).await.unwrap();
+    docker.create_container(create_options, config).await?;
 
     docker
         .start_container(&container, None::<StartContainerOptions<String>>)
-        .await
-        .unwrap();
+        .await?;
 
     Ok(())
 }

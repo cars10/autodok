@@ -4,7 +4,7 @@ use axum::{
     middleware::{self, Next},
     response::Response,
 };
-use axum::{routing::post, Router};
+use axum::{routing::get, routing::post, Router};
 use bollard::errors::Error as BolladError;
 use bollard::Docker;
 use error::AutodokError;
@@ -25,29 +25,20 @@ lazy_static! {
     static ref API_KEY: String = api_key::api_key();
 }
 
-fn connect_docker() -> Result<Docker, BolladError> {
-    Docker::connect_with_socket_defaults()
-}
+#[tokio::main]
+async fn main() {
+    let format = tracing_subscriber::fmt::format().with_target(false);
+    tracing_subscriber::fmt().event_format(format).init();
 
-async fn auth(
-    State(api_key): State<String>,
-    req: Request,
-    next: Next,
-) -> Result<Response, StatusCode> {
-    let auth_header = req
-        .headers()
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|header| header.to_str().ok());
+    ctrlc::set_handler(|| {
+        log::info!("Stopping autodok...");
+        std::process::exit(0);
+    })
+    .expect("Error setting exit handler");
 
-    let Some(auth_header) = auth_header else {
-        return Err(StatusCode::UNAUTHORIZED);
-    };
+    log::info!("Starting autodok...");
 
-    if auth_header.eq(&api_key) {
-        Ok(next.run(req).await)
-    } else {
-        Err(StatusCode::UNAUTHORIZED)
-    }
+    run().await.unwrap();
 }
 
 async fn run() -> Result<(), AutodokError> {
@@ -81,6 +72,7 @@ async fn run() -> Result<(), AutodokError> {
     let app = Router::new()
         .route("/update/:container/:image", post(routes::update_image))
         .route_layer(middleware::from_fn_with_state(API_KEY.to_string(), auth))
+        .route("/health", get(routes::health))
         .with_state(docker)
         .layer(tracing);
 
@@ -90,18 +82,27 @@ async fn run() -> Result<(), AutodokError> {
     Ok(())
 }
 
-#[tokio::main]
-async fn main() {
-    let format = tracing_subscriber::fmt::format().with_target(false);
-    tracing_subscriber::fmt().event_format(format).init();
+fn connect_docker() -> Result<Docker, BolladError> {
+    Docker::connect_with_socket_defaults()
+}
 
-    ctrlc::set_handler(|| {
-        log::info!("Stopping autodok...");
-        std::process::exit(0);
-    })
-    .expect("Error setting exit handler");
+async fn auth(
+    State(api_key): State<String>,
+    req: Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let auth_header = req
+        .headers()
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|header| header.to_str().ok());
 
-    log::info!("Starting autodok...");
+    let Some(auth_header) = auth_header else {
+        return Err(StatusCode::UNAUTHORIZED);
+    };
 
-    run().await.unwrap();
+    if auth_header.eq(&api_key) {
+        Ok(next.run(req).await)
+    } else {
+        Err(StatusCode::UNAUTHORIZED)
+    }
 }

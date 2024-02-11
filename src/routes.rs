@@ -34,3 +34,8 @@ pub async fn update_image(
     };
     Ok((StatusCode::OK, serde_json::to_string(&msg).unwrap()).into_response())
 }
+
+pub async fn health(State(docker): State<Docker>) -> Result<Response, AutodokError> {
+    docker.info().await?;
+    Ok((StatusCode::OK).into_response())
+}

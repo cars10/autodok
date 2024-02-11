@@ -13,7 +13,8 @@ RUN touch /usr/src/autodok/src/main.rs
 RUN cargo build --target x86_64-unknown-linux-musl --release
 
 
-FROM alpine:3 AS runtime 
+FROM alpine:3 AS runtime
+RUN apk add curl --no-cache
 COPY --from=builder /usr/src/autodok/target/x86_64-unknown-linux-musl/release/autodok /usr/local/bin
 EXPOSE 3000
 CMD ["/usr/local/bin/autodok"]

@@ -15,7 +15,7 @@ futures = "0.3.30"
 futures-core = "0.3.30"
 futures-util = "0.3.30"
 log = "0.4.20"
-ctrlc = "3.4.2"
+ctrlc = { version = "3.4.2", features = ["termination"] }
 rand = "0.8.5"
 lazy_static = "1.4.0"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

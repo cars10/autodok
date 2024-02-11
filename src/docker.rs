@@ -2,8 +2,8 @@ use crate::error::AutodokError;
 use bollard::{
     container::{Config, CreateContainerOptions, NetworkingConfig, StartContainerOptions},
     image::CreateImageOptions,
-    service::CreateImageInfo,
     models::ContainerConfig,
+    service::CreateImageInfo,
     Docker,
 };
 use futures_util::stream::StreamExt;
@@ -26,7 +26,7 @@ pub async fn pull_image(docker: &Docker, image: String) -> Result<(), AutodokErr
 pub async fn stop_start_container(
     docker: &Docker,
     container: String,
-    image: String
+    image: String,
 ) -> Result<(), crate::AutodokError> {
     let info = docker.inspect_container(&container, None).await?;
 

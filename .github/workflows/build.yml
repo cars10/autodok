@@ -1,0 +1,25 @@
+name: build and push
+
+on:
+  workflow_dispatch:
+
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions: write-all
+
+    steps:
+      - name: check out
+        uses: actions/checkout@v4
+
+      - name: login to docker hub
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: build and push
+        run: make prod

@@ -7,5 +7,10 @@ run:
 build:
 	cargo build --release
 
-docker:
+docker_build:
 	docker build . -t autodok
+
+docker_push:
+	docker push ghcr.io/cars10/autodok:latest
+
+prod: docker_build docker_push

@@ -6,10 +6,9 @@ use bollard::{
     Docker,
 };
 use futures_util::stream::StreamExt;
-use log::info;
+use log::debug;
 
 pub async fn pull_image(docker: &Docker, image: String) -> Result<(), AutodokError> {
-    info!("Starting to pull image {image}");
     let options = Some(CreateImageOptions {
         from_image: image,
         ..Default::default()
@@ -18,9 +17,8 @@ pub async fn pull_image(docker: &Docker, image: String) -> Result<(), AutodokErr
     let mut stream = docker.create_image(options, None, None);
     while let Some(res) = stream.next().await {
         let info: CreateImageInfo = res?;
-        info!("{info:?}");
+        debug!("{info:?}");
     }
-    info!("Image pull done.");
     Ok(())
 }
 
@@ -28,7 +26,6 @@ pub async fn stop_start_container(
     docker: &Docker,
     container: String,
 ) -> Result<(), crate::AutodokError> {
-    info!("Container: {:?}", &container);
     let info = docker.inspect_container(&container, None).await?;
 
     docker.stop_container(&container, None).await?;

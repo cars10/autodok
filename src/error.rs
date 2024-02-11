@@ -1,7 +1,6 @@
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use bollard::errors::Error as BolladError;
-use serde::Serialize;
 use std::error::Error;
 use std::fmt;
 
@@ -12,7 +11,6 @@ pub enum AutodokError {
         status_code: StatusCode,
         message: String,
     },
-    GenericError(String),
 }
 
 impl AutodokError {
@@ -36,7 +34,6 @@ impl fmt::Display for AutodokError {
                 status_code,
                 message,
             } => write!(f, "DockerContainerNotFound {status_code} {message}"),
-            Self::GenericError(s) => write!(f, "Generic error: {}", s),
         }
     }
 }
@@ -53,11 +50,6 @@ impl From<BolladError> for AutodokError {
     }
 }
 
-#[derive(Debug, Serialize)]
-struct Msg {
-    message: String,
-}
-
 impl IntoResponse for AutodokError {
     fn into_response(self) -> Response {
         let (status_code, message) = match self {
@@ -69,13 +61,9 @@ impl IntoResponse for AutodokError {
                 status_code,
                 message,
             } => (status_code, message),
-            AutodokError::GenericError(_) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "something else went wrong".to_string(),
-            ),
         };
 
-        let msg = Msg { message };
+        let msg = crate::routes::Msg { message };
         (status_code, serde_json::to_string(&msg).unwrap()).into_response()
     }
 }

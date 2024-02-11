@@ -1,6 +1,4 @@
 use log::info;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
 use std::fs;
 
 static DATA_DIR_PATH: &str = "data";
@@ -19,19 +17,10 @@ fn existing_api_key() -> Option<String> {
 
 fn setup_api_key() -> String {
     fs::create_dir_all(DATA_DIR_PATH).unwrap();
-    let api_key = generate_api_key();
+
+    info!("No API key found, generating new API key...");
+    let api_key = crate::random::random_string(30);
     fs::write(API_KEY_PATH, &api_key).unwrap();
 
     api_key
-}
-
-fn generate_api_key() -> String {
-    info!("No API key found, generating new API key...");
-    let rand_string: String = thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(30)
-        .map(char::from)
-        .collect();
-
-    rand_string
 }

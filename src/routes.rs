@@ -26,7 +26,7 @@ pub async fn update_image(
     info!("  Image pull done.");
 
     info!("  Restarting container...");
-    crate::docker::stop_start_container(&docker, container.clone()).await?;
+    crate::docker::stop_start_container(&docker, container.clone(), image.clone()).await?;
     info!("  Container '{container}' restarted with new image '{image}'.");
 
     let msg = crate::routes::Msg {

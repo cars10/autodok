@@ -3,6 +3,7 @@ use bollard::{
     container::{Config, CreateContainerOptions, NetworkingConfig, StartContainerOptions},
     image::CreateImageOptions,
     service::CreateImageInfo,
+    models::ContainerConfig,
     Docker,
 };
 use futures_util::stream::StreamExt;
@@ -25,6 +26,7 @@ pub async fn pull_image(docker: &Docker, image: String) -> Result<(), AutodokErr
 pub async fn stop_start_container(
     docker: &Docker,
     container: String,
+    image: String
 ) -> Result<(), crate::AutodokError> {
     let info = docker.inspect_container(&container, None).await?;
 
@@ -36,7 +38,10 @@ pub async fn stop_start_container(
         platform: info.platform,
     });
 
-    let container_config = info.config.unwrap();
+    let container_config = ContainerConfig {
+        image: Some(image),
+        ..info.config.unwrap()
+    };
     let network_config = NetworkingConfig {
         endpoints_config: info.network_settings.unwrap().networks.unwrap(),
     };

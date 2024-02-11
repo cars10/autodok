@@ -1,13 +1,19 @@
 use axum::{
-    extract::{Path, State},
+    extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use bollard::Docker;
 use log::info;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::AutodokError;
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateContainerImage {
+    container: String,
+    image: String,
+}
 
 #[derive(Debug, Serialize)]
 pub struct Msg {
@@ -16,8 +22,11 @@ pub struct Msg {
 
 pub async fn update_image(
     State(docker): State<Docker>,
-    Path((container, image)): Path<(String, String)>,
+    extract::Json(payload): extract::Json<UpdateContainerImage>,
 ) -> Result<Response, AutodokError> {
+    let container = payload.container;
+    let image = payload.image;
+
     docker.inspect_container(&container, None).await?;
     info!("  Container '{container}' found.");
 
@@ -29,7 +38,7 @@ pub async fn update_image(
     crate::docker::stop_start_container(&docker, container.clone(), image.clone()).await?;
     info!("  Container '{container}' restarted with new image '{image}'.");
 
-    let msg = crate::routes::Msg {
+    let msg = Msg {
         message: format!("Container '{container}' restarted with new image '{image}'"),
     };
     Ok((StatusCode::OK, serde_json::to_string(&msg).unwrap()).into_response())

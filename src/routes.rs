@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use bollard::Docker;
+use bollard::{auth::DockerCredentials, Docker};
 use log::info;
 use serde::{Deserialize, Serialize};
 
@@ -13,6 +13,7 @@ use crate::error::AutodokError;
 pub struct UpdateContainerImage {
     container: String,
     image: String,
+    registry: Option<DockerCredentials>,
 }
 
 #[derive(Debug, Serialize)]
@@ -31,7 +32,7 @@ pub async fn update_image(
     info!("  Container '{container}' found.");
 
     info!("  Pulling image '{image}'...");
-    crate::docker::pull_image(&docker, image.clone()).await?;
+    crate::docker::pull_image(&docker, image.clone(), payload.registry).await?;
     info!("  Image pull done.");
 
     info!("  Restarting container...");

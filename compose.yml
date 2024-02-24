@@ -1,16 +1,13 @@
 services:
   autodok:
-    image: autodok
+    image: cars10/autodok
     container_name: autodok
-    ports:
-      - 127.0.0.1:3000:3000
+    restart: always
+    #ports:
+    #  - 3000:3000
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./data:/data
-    environment:
-      DEFAULT_REGISTRY_ADDRESS: $DEFAULT_REGISTRY_ADDRESS
-      DEFAULT_REGISTRY_USERNAME: $DEFAULT_REGISTRY_USERNAME
-      DEFAULT_REGISTRY_PASSWORD: $DEFAULT_REGISTRY_PASSWORD
     healthcheck:
       test: curl --fail http://localhost:3000/health || exit 1
       interval: 30s

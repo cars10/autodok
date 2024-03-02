@@ -16,6 +16,7 @@ use tower_http::trace::TraceLayer;
 use tracing::{info_span, Span};
 
 mod api_key;
+mod credentials;
 mod docker;
 mod error;
 mod random;
@@ -27,6 +28,8 @@ lazy_static! {
 
 #[tokio::main]
 async fn main() {
+    dotenv::dotenv().ok();
+
     let format = tracing_subscriber::fmt::format().with_target(false);
     tracing_subscriber::fmt().event_format(format).init();
 

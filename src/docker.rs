@@ -1,6 +1,5 @@
 use crate::error::AutodokError;
 use bollard::{
-    auth::DockerCredentials,
     container::{Config, CreateContainerOptions, NetworkingConfig, StartContainerOptions},
     image::CreateImageOptions,
     models::ContainerConfig,
@@ -11,19 +10,14 @@ use bollard::{
 use futures_util::stream::StreamExt;
 use log::debug;
 use std::collections::HashMap;
-use std::env;
 
-pub async fn pull_image(
-    docker: &Docker,
-    image: String,
-    credentials: Option<DockerCredentials>,
-) -> Result<(), AutodokError> {
+pub async fn pull_image(docker: &Docker, image: String) -> Result<(), AutodokError> {
     let options = Some(CreateImageOptions {
-        from_image: image,
+        from_image: image.clone(),
         ..Default::default()
     });
 
-    let credentials = credentials.or_else(default_credentials);
+    let credentials = crate::credentials::registry_credentials(&image);
 
     let mut stream = docker.create_image(options, None, credentials);
     while let Some(res) = stream.next().await {
@@ -31,15 +25,6 @@ pub async fn pull_image(
         debug!("{info:?}");
     }
     Ok(())
-}
-
-pub fn default_credentials() -> Option<DockerCredentials> {
-    Some(DockerCredentials {
-        serveraddress: env::var("DEFAULT_REGISTRY_ADDRESS").ok(),
-        username: env::var("DEFAULT_REGISTRY_USERNAME").ok(),
-        password: env::var("DEFAULT_REGISTRY_PASSWORD").ok(),
-        ..Default::default()
-    })
 }
 
 pub async fn stop_start_container(

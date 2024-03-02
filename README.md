@@ -78,9 +78,6 @@ The following fields are supported in the request body:
 |------------------------|------------|-------------------------------------------------|-------------------------------------|
 | container              | foo        | yes                                             | Name of a **running** container     |
 | image                  | foo:latest | yes                                             | Name and tag of an existing image   |
-| registry.serveraddress | ghcr.io    | if the image is pushed to a private registry | Domain of a custom docker registry  |
-| registry.username      | cars10     | if the image is pushed to a private registry | Username for custom docker registry |
-| registry.password      | foobar     | if the image is pushed to a private registry | Password for custom docker registry |
 
 ### Examples
 
@@ -100,17 +97,6 @@ curl -X POST "http://autodok.example.com/update" \
 {"message":"Container 'elasticsearch' restarted with new image 'docker.elastic.co/elasticsearch/elasticsearch:8.8.0'"}
 ```
 
-Update container `secret` with new image from private registry `ghcr.io/nsa/secret:42`
-```bash
-curl -X POST "http://autodok.example.com/update" \
-     -H "Authorization: $API_KEY" \
-     -H "content-type: application/json" \
-     -d '{"container": "secret", "image": "ghcr.io/nsa/secret:42", "registry": {"serveraddress": "ghcr.io", "username": "$USERNAME", "password": "$PASSWORD"}}'
-
-# response:
-{"message":"Container 'secret' restarted with new image 'ghcr.io/nsa/secret:42'"}
-```
-
 ## FAQ & possible issues
 
 ### Request timeouts
@@ -119,7 +105,7 @@ Requests to `POST /update` might timeout depending on your setup. Please keep in
 
 ### Using a private registry
 
-You can download images from private registries by providing the optional registry field in the request body: `"registry": {"serveraddress": "", "username": "", "password": ""}`
+You can download images from private registries by providing a standard docker `config.json`. Uncomment the volume in `compose.yml` and adjust the path to your `config.json`. *autodok* will then use your existing credentials whenever needed.
 
 ### Restarting multiple containers at once
 

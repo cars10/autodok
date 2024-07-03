@@ -25,7 +25,7 @@ pub async fn update_image(
     extract::Json(payload): extract::Json<UpdateContainerImage>,
 ) -> Result<Response, AutodokError> {
     let container = payload.container;
-    let image = payload.image;
+    let image = crate::parse::parse_image_tag(payload.image)?;
 
     docker.inspect_container(&container, None).await?;
     info!("  Container '{container}' found.");

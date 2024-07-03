@@ -6,18 +6,42 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum AutodokError {
-    DockerError(BolladError),
-    DockerResponseServerError {
+    Docker(BolladError),
+    DockerResponseServer {
         status_code: StatusCode,
         message: String,
     },
+    Input(ImageParseError),
+}
+
+#[derive(Debug)]
+pub enum ImageParseError {
+    EmptyImage,
+    EmptyPart(String),
+}
+
+impl Error for ImageParseError {}
+
+impl fmt::Display for ImageParseError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::EmptyImage => write!(f, "image missing"),
+            Self::EmptyPart(image) => write!(f, "invalid image: {image}"),
+        }
+    }
+}
+
+impl From<ImageParseError> for AutodokError {
+    fn from(err: ImageParseError) -> Self {
+        AutodokError::Input(err)
+    }
 }
 
 impl AutodokError {
     fn from_bollard(code: u16, message: String) -> Self {
         let status_code = StatusCode::from_u16(code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 
-        Self::DockerResponseServerError {
+        Self::DockerResponseServer {
             status_code,
             message,
         }
@@ -29,11 +53,12 @@ impl Error for AutodokError {}
 impl fmt::Display for AutodokError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::DockerError(e) => write!(f, "Docker error: {}", e),
-            Self::DockerResponseServerError {
+            Self::Docker(e) => write!(f, "Docker error: {}", e),
+            Self::DockerResponseServer {
                 status_code,
                 message,
             } => write!(f, "DockerContainerNotFound {status_code} {message}"),
+            Self::Input(e) => write!(f, "InputError: {e:?}"),
         }
     }
 }
@@ -45,7 +70,7 @@ impl From<BolladError> for AutodokError {
                 status_code,
                 message,
             } => AutodokError::from_bollard(status_code, message),
-            _ => AutodokError::DockerError(err),
+            _ => AutodokError::Docker(err),
         }
     }
 }
@@ -53,14 +78,21 @@ impl From<BolladError> for AutodokError {
 impl IntoResponse for AutodokError {
     fn into_response(self) -> Response {
         let (status_code, message) = match self {
-            AutodokError::DockerError(e) => (
+            AutodokError::Docker(e) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("something went wrong: {e}"),
             ),
-            AutodokError::DockerResponseServerError {
+            AutodokError::DockerResponseServer {
                 status_code,
                 message,
             } => (status_code, message),
+            AutodokError::Input(err) => {
+                let message = match err {
+                    ImageParseError::EmptyImage => "image missing".to_string(),
+                    ImageParseError::EmptyPart(image) => format!("invalid image: {}", image),
+                };
+                (StatusCode::BAD_REQUEST, message)
+            }
         };
 
         let msg = crate::routes::Msg { message };

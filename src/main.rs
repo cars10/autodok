@@ -19,6 +19,7 @@ mod api_key;
 mod credentials;
 mod docker;
 mod error;
+mod parse;
 mod random;
 mod routes;
 

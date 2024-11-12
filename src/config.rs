@@ -6,8 +6,8 @@ pub struct Config {
 impl Config {
     pub fn new() -> Self {
         Config {
-            host: std::env::var("HOST").unwrap_or("0.0.0.0".to_string()),
-            port: std::env::var("PORT").unwrap_or("3000".to_string()),
+            host: std::env::var("AUTODOK_HOST").unwrap_or("0.0.0.0".to_string()),
+            port: std::env::var("AUTODOK_PORT").unwrap_or("3000".to_string()),
         }
     }
 

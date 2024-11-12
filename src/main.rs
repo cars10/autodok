@@ -10,12 +10,14 @@ use bollard::Docker;
 use error::AutodokError;
 use lazy_static::lazy_static;
 
+use config::Config;
 use std::time::Duration;
 use tower_http::classify::ServerErrorsFailureClass;
 use tower_http::trace::TraceLayer;
 use tracing::{info_span, Span};
 
 mod api_key;
+mod config;
 mod credentials;
 mod docker;
 mod error;
@@ -29,7 +31,7 @@ lazy_static! {
 
 #[tokio::main]
 async fn main() {
-    dotenv::dotenv().ok();
+    let config = Config::new();
 
     let format = tracing_subscriber::fmt::format().with_target(false);
     tracing_subscriber::fmt().event_format(format).init();
@@ -42,10 +44,10 @@ async fn main() {
 
     log::info!("Starting autodok...");
 
-    run().await.unwrap();
+    run(&config).await.unwrap();
 }
 
-async fn run() -> Result<(), AutodokError> {
+async fn run(config: &Config) -> Result<(), AutodokError> {
     let docker = connect_docker()?;
     let tracing = TraceLayer::new_for_http()
         .make_span_with(|_request: &Request<_>| {
@@ -80,7 +82,9 @@ async fn run() -> Result<(), AutodokError> {
         .with_state(docker)
         .layer(tracing);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let addr = config.addr();
+    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+    log::info!("Listening on {addr}");
     axum::serve(listener, app).await.unwrap();
 
     Ok(())

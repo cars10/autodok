@@ -1,0 +1,36 @@
+services:
+  server:
+    image: docker:latest
+    container_name: docker_server
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=/certs
+    volumes:
+      - docker_certs_ca:/certs/ca
+      - docker_certs_client:/certs/client
+    networks:
+      docker_network:
+        aliases:
+          - docker
+
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    environment:
+      DOCKER_HOST: https://docker:2376
+    depends_on:
+      - server
+    volumes:
+      - docker_certs_client:/certs/client:ro
+      - ./src/:/usr/src/autodok/src
+      - ./tests/:/usr/src/autodok/tests
+    networks:
+      - docker_network
+
+volumes:
+  docker_certs_ca:
+  docker_certs_client:
+
+networks:
+  docker_network:

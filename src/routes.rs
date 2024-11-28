@@ -2,11 +2,12 @@ use axum::{
     extract::{self, State},
     http::StatusCode,
     response::{IntoResponse, Response},
+    Json,
 };
 use bollard::Docker;
-use log::info;
 use serde::{Deserialize, Serialize};
 
+use crate::docker;
 use crate::error::AutodokError;
 
 #[derive(Debug, Deserialize)]
@@ -16,35 +17,29 @@ pub struct UpdateContainerImage {
 }
 
 #[derive(Debug, Serialize)]
-pub struct Msg {
-    pub message: String,
+pub struct UpdatedResponse {
+    pub container: String,
+    pub image: String,
 }
 
-pub async fn update_image(
+impl UpdatedResponse {
+    pub fn new(container: String, image: String) -> Self {
+        UpdatedResponse { container, image }
+    }
+}
+
+pub async fn update_container(
     State(docker): State<Docker>,
     extract::Json(payload): extract::Json<UpdateContainerImage>,
 ) -> Result<Response, AutodokError> {
-    let container = payload.container;
-    let image = crate::parse::parse_image_tag(payload.image)?;
+    let image = crate::parse::parse_image_tag(payload.image.to_string())?;
 
-    docker.inspect_container(&container, None).await?;
-    info!("  Container '{container}' found.");
-
-    info!("  Pulling image '{image}'...");
-    crate::docker::pull_image(&docker, image.clone()).await?;
-    info!("  Image pull done.");
-
-    info!("  Restarting container...");
-    crate::docker::stop_start_container(&docker, container.clone(), image.clone()).await?;
-    info!("  Container '{container}' restarted with new image '{image}'.");
-
-    let msg = Msg {
-        message: format!("Container '{container}' restarted with new image '{image}'"),
-    };
-    Ok((StatusCode::OK, serde_json::to_string(&msg).unwrap()).into_response())
+    docker::update_image_and_container(&docker, &payload.container, &image).await?;
+    let resp = UpdatedResponse::new(payload.container, payload.image);
+    Ok((StatusCode::OK, Json(resp)).into_response())
 }
 
 pub async fn health(State(docker): State<Docker>) -> Result<Response, AutodokError> {
-    docker.info().await?;
+    docker.ping().await?;
     Ok((StatusCode::OK).into_response())
 }

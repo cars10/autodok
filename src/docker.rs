@@ -8,10 +8,21 @@ use bollard::{
     Docker,
 };
 use futures_util::stream::StreamExt;
-use log::debug;
+use log::{debug, info};
 use std::collections::HashMap;
 
-pub async fn pull_image(docker: &Docker, image: String) -> Result<(), AutodokError> {
+pub async fn update_image_and_container(
+    docker: &Docker,
+    container: &str,
+    image: &str,
+) -> Result<(), AutodokError> {
+    docker.inspect_container(&container, None).await?;
+    crate::docker::pull_image(&docker, image.to_string()).await?;
+    crate::docker::stop_start_container(&docker, container.to_string(), image.to_string()).await?;
+    Ok(())
+}
+
+async fn pull_image(docker: &Docker, image: String) -> Result<(), AutodokError> {
     let options = Some(CreateImageOptions {
         from_image: image.clone(),
         ..Default::default()
@@ -19,15 +30,17 @@ pub async fn pull_image(docker: &Docker, image: String) -> Result<(), AutodokErr
 
     let credentials = crate::credentials::registry_credentials(&image);
 
+    info!("  Pulling image '{image}'...");
     let mut stream = docker.create_image(options, None, credentials);
     while let Some(res) = stream.next().await {
         let info: CreateImageInfo = res?;
         debug!("{info:?}");
     }
+    info!("  Image pull done.");
     Ok(())
 }
 
-pub async fn stop_start_container(
+async fn stop_start_container(
     docker: &Docker,
     container: String,
     image: String,
@@ -35,6 +48,7 @@ pub async fn stop_start_container(
     let info = docker.inspect_container(&container, None).await?;
 
     // stop and remove old container
+    info!("  Restarting container...");
     docker.stop_container(&container, None).await?;
     docker.remove_container(&container, None).await?;
 
@@ -45,7 +59,7 @@ pub async fn stop_start_container(
     });
 
     let container_config = ContainerConfig {
-        image: Some(image),
+        image: Some(image.clone()),
         ..info.config.unwrap()
     };
 
@@ -77,5 +91,6 @@ pub async fn stop_start_container(
         .start_container(&container, None::<StartContainerOptions<String>>)
         .await?;
 
+    info!("  Container '{container}' restarted with new image '{image}'.");
     Ok(())
 }

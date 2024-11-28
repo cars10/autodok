@@ -1,0 +1,9 @@
+FROM rust:slim AS builder
+
+WORKDIR /usr/src
+
+RUN USER=root cargo new autodok
+RUN rustup target add x86_64-unknown-linux-musl
+COPY Cargo.toml Cargo.lock /usr/src/autodok/
+WORKDIR /usr/src/autodok
+RUN cargo test

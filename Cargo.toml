@@ -10,7 +10,7 @@ axum = "0.7.7"
 tokio = { version = "1.0", features = ["full"] }
 serde = "1.0"
 serde_json = "1.0"
-bollard = "0.17"
+bollard = { version = "0.17", features= ["ssl"] }
 futures = "0.3.31"
 futures-core = "0.3.31"
 futures-util = "0.3.31"

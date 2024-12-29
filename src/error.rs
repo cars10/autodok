@@ -82,7 +82,6 @@ pub struct Msg {
     pub message: String,
 }
 
-
 impl IntoResponse for AutodokError {
     fn into_response(self) -> Response {
         let (status_code, message) = match self {

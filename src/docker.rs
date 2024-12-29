@@ -15,10 +15,37 @@ pub async fn update_image_and_container(
     docker: &Docker,
     container: &str,
     image: &str,
+    wait: Option<bool>,
+    pull: Option<bool>,
 ) -> Result<(), AutodokError> {
-    docker.inspect_container(&container, None).await?;
-    crate::docker::pull_image(&docker, image.to_string()).await?;
-    crate::docker::stop_start_container(&docker, container.to_string(), image.to_string()).await?;
+    docker.inspect_container(container, None).await?;
+
+    if let Some(true) = wait {
+        do_the_deed(docker, container, image, pull).await?;
+    } else {
+        tokio::spawn({
+            let docker = docker.clone();
+            let container = container.to_string();
+            let image = image.to_string();
+            async move {
+                do_the_deed(&docker, &container, &image, pull).await.unwrap();
+            }
+        });
+    }
+    Ok(())
+}
+
+async fn do_the_deed(
+    docker: &Docker,
+    container: &str,
+    image: &str,
+    pull: Option<bool>,
+) -> Result<(), AutodokError> {
+    if let Some(true) = pull {
+        crate::docker::pull_image(docker, image.to_string()).await?;
+    }
+    crate::docker::stop_start_container(docker, container.to_string(), image.to_string()).await?;
+
     Ok(())
 }
 

@@ -23,3 +23,5 @@ tracing = "0.1"
 tower-http = { version = "0.6", features = ["trace"] }
 base64 = "0.22"
 chrono = "0.4.38"
+tar = "0.4.43"
+bytes = "1.9.0"

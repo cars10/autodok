@@ -18,14 +18,17 @@ prod: docker_build docker_push
 
 ### Tests
 
-build_test:
-	docker compose -f compose.test.yml build test
-
-test: _start_test_docker_server
+test: _start_test_docker_server _build_test
 	docker compose -f compose.test.yml run --rm test cargo test -- --nocapture
 
 test_bash: _start_test_docker_server
 	docker compose -f compose.test.yml run --rm -it test bash
 
+docker_shell: _start_test_docker_server
+	docker compose -f compose.test.yml exec server sh
+
 _start_test_docker_server:
 	docker compose -f compose.test.yml up -d --remove-orphans server
+
+_build_test:
+	docker compose -f compose.test.yml build test

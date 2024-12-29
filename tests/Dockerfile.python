@@ -1,0 +1,9 @@
+ARG MESSAGE=hello
+FROM python:alpine
+
+EXPOSE 8000
+
+ARG MESSAGE
+RUN echo $MESSAGE > index.txt
+
+CMD ["python", "-m", "http.server"]

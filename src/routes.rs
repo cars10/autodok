@@ -10,24 +10,23 @@ use serde::{Deserialize, Serialize};
 use crate::docker;
 use crate::error::AutodokError;
 
-#[derive(Debug, Deserialize)]
-pub struct UpdateContainerImage {
-    container: String,
-    image: String,
-    wait: Option<bool>,
-    pull: Option<bool>,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateContainerParams {
+    pub container: String,
+    pub wait: Option<bool>,
+    pub pull: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
-pub struct UpdatedResponse {
+pub struct UpdateContainerResponse {
     pub container: String,
     pub image: String,
     pub wait: bool,
 }
 
-impl UpdatedResponse {
+impl UpdateContainerResponse {
     pub fn new(container: String, image: String, wait: bool) -> Self {
-        UpdatedResponse {
+        UpdateContainerResponse {
             container,
             image,
             wait,
@@ -37,23 +36,19 @@ impl UpdatedResponse {
 
 pub async fn update_container(
     State(docker): State<Docker>,
-    extract::Json(payload): extract::Json<UpdateContainerImage>,
+    extract::Json(payload): extract::Json<UpdateContainerParams>,
 ) -> Result<Response, AutodokError> {
-    let image = crate::parse::parse_image_tag(payload.image.to_string())?;
-
-    docker::update_image_and_container(
+    let image = docker::pull_image_and_update_container(
         &docker,
         &payload.container,
-        &image,
+        None,
         payload.wait,
         payload.pull,
     )
     .await?;
-    let resp = UpdatedResponse::new(
-        payload.container,
-        payload.image,
-        payload.wait.unwrap_or(false),
-    );
+
+    let resp =
+        UpdateContainerResponse::new(payload.container, image, payload.wait.unwrap_or(false));
     Ok((StatusCode::OK, Json(resp)).into_response())
 }
 

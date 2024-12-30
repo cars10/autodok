@@ -3,7 +3,13 @@ name = "autodok"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "autodok"
+path = "src/lib.rs"
+
+[[bin]]
+name = "autodok"
+path = "src/main.rs"
 
 [dependencies]
 axum = "0.7.7"
@@ -25,3 +31,4 @@ base64 = "0.22"
 chrono = "0.4.38"
 tar = "0.4.43"
 bytes = "1.9.0"
+reqwest = { version = "0.12", default-features = false, features = ["http2", "json"] }

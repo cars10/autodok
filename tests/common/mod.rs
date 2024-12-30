@@ -1,4 +1,7 @@
-use bollard::container::{self, ListContainersOptions, StopContainerOptions};
+use bollard::container::{
+    self, ListContainersOptions, RemoveContainerOptions, StopContainerOptions,
+};
+use bollard::image::{CreateImageOptions, PushImageOptions};
 use bollard::secret::{HostConfig, PortBinding};
 use bollard::{image::BuildImageOptions, Docker};
 use futures_util::stream::StreamExt;
@@ -6,11 +9,19 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
 
+pub async fn run_server() {
+    let config = autodok::config::Config::new();
+    tokio::spawn(async move {
+        autodok::run(&config).await.unwrap();
+    });
+}
+
 pub async fn setup_docker() -> Result<Docker, bollard::errors::Error> {
     let docker = connect_docker().await;
     docker.ping().await?;
 
     stop_all(&docker).await?;
+    start_registry(&docker).await?;
     Ok(docker)
 }
 
@@ -56,7 +67,7 @@ pub async fn build_image(docker: &Docker, message: &str) -> Result<(), bollard::
     let build_options = BuildImageOptions {
         dockerfile: dockerfile_path,
         buildargs,
-        t: "python_server:latest",
+        t: "localhost:5000/python_server:latest",
         rm: true,
         ..Default::default()
     };
@@ -71,6 +82,62 @@ pub async fn build_image(docker: &Docker, message: &str) -> Result<(), bollard::
         res?;
     }
 
+    let push_options = Some(PushImageOptions { tag: "latest" });
+
+    let mut push_stream = docker.push_image("localhost:5000/python_server", push_options, None);
+    while let Some(res) = push_stream.next().await {
+        res?;
+    }
+
+    Ok(())
+}
+
+async fn start_registry(docker: &Docker) -> Result<(), bollard::errors::Error> {
+    let pull_options = CreateImageOptions {
+        from_image: "registry:2",
+        ..Default::default()
+    };
+
+    let mut stream = docker.create_image(Some(pull_options), None, None);
+    while let Some(msg) = stream.next().await {
+        msg?;
+    }
+
+    let mut port_bindings = HashMap::new();
+    port_bindings.insert(
+        "5000/tcp".to_string(),
+        Some(vec![PortBinding {
+            host_ip: Some("0.0.0.0".to_string()),
+            host_port: Some("5000".to_string()),
+        }]),
+    );
+    let config = container::Config {
+        image: Some("registry:2"),
+        host_config: Some(HostConfig {
+            port_bindings: Some(port_bindings),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+
+    let container_name = "registry";
+    docker
+        .create_container(
+            Some(container::CreateContainerOptions {
+                name: container_name,
+                ..Default::default()
+            }),
+            config,
+        )
+        .await?;
+
+    docker
+        .start_container(
+            container_name,
+            None::<container::StartContainerOptions<String>>,
+        )
+        .await?;
+
     Ok(())
 }
 
@@ -79,14 +146,13 @@ pub async fn start_container(docker: &Docker) -> Result<(), bollard::errors::Err
     port_bindings.insert(
         "8000/tcp".to_string(),
         Some(vec![PortBinding {
-            host_ip: Some("127.0.0.1".to_string()),
+            host_ip: Some("0.0.0.0".to_string()),
             host_port: Some("8000".to_string()),
         }]),
     );
     let config = container::Config {
-        image: Some("python_server:latest"),
+        image: Some("localhost:5000/python_server:latest"),
         host_config: Some(HostConfig {
-            auto_remove: Some(true),
             port_bindings: Some(port_bindings),
             ..Default::default()
         }),
@@ -118,7 +184,7 @@ pub async fn stop_all(docker: &Docker) -> Result<(), bollard::errors::Error> {
     let filters: HashMap<String, Vec<String>> = HashMap::new();
     let containers = docker
         .list_containers(Some(ListContainersOptions {
-            all: false,
+            all: true,
             filters,
             ..Default::default()
         }))
@@ -128,6 +194,16 @@ pub async fn stop_all(docker: &Docker) -> Result<(), bollard::errors::Error> {
         if let Some(container_id) = &container.id {
             docker
                 .stop_container(container_id, Some(StopContainerOptions { t: 1 }))
+                .await?;
+
+            docker
+                .remove_container(
+                    container_id,
+                    Some(RemoveContainerOptions {
+                        force: true,
+                        ..Default::default()
+                    }),
+                )
                 .await?;
         }
     }

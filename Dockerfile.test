@@ -1,9 +1,17 @@
 FROM rust:slim AS builder
 
+ENV PACKAGE_PATH=/usr/src/autodok
 WORKDIR /usr/src
 
 RUN USER=root cargo new autodok
 RUN rustup target add x86_64-unknown-linux-musl
-COPY Cargo.toml Cargo.lock /usr/src/autodok/
-WORKDIR /usr/src/autodok
+COPY Cargo.toml Cargo.lock $PACKAGE_PATH/
+WORKDIR $PACKAGE_PATH
+RUN touch $PACKAGE_PATH/src/lib.rs
 RUN cargo test
+RUN rm $PACKAGE_PATH/src/lib.rs
+
+COPY . $PACKAGE_PATH
+
+RUN touch $PACKAGE_PATH/src/lib.rs
+RUN touch $PACKAGE_PATH/src/main.rs

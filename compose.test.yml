@@ -19,12 +19,11 @@ services:
       dockerfile: Dockerfile.test
     environment:
       DOCKER_HOST: https://docker:2376
+      DOCKER_TLS_CERTDIR: /certs
     depends_on:
       - server
     volumes:
       - docker_certs_client:/certs/client:ro
-      - ./src/:/usr/src/autodok/src
-      - ./tests/:/usr/src/autodok/tests
     networks:
       - docker_network
 

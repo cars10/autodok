@@ -27,7 +27,7 @@ impl Error for ImageParseError {}
 impl fmt::Display for ImageParseError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Self::EmptyImage => write!(f, "image missing"),
+            Self::EmptyImage => write!(f, "image not specified"),
             Self::EmptyPart(image) => write!(f, "invalid image: {image}"),
         }
     }

@@ -1,4 +1,4 @@
-use crate::error::AutodokError;
+use crate::error::{AutodokError, ImageParseError};
 use bollard::{
     container::{Config, CreateContainerOptions, NetworkingConfig, StartContainerOptions},
     image::CreateImageOptions,
@@ -11,34 +11,39 @@ use futures_util::stream::StreamExt;
 use log::{debug, info};
 use std::collections::HashMap;
 
-pub async fn update_image_and_container(
+pub async fn pull_image_and_update_container(
     docker: &Docker,
     container: &str,
-    image: &str,
+    image: Option<String>,
     wait: Option<bool>,
     pull: Option<bool>,
-) -> Result<(), AutodokError> {
-    docker.inspect_container(container, None).await?;
+) -> Result<String, AutodokError> {
+    let inspect = docker.inspect_container(container, None).await?;
 
-    if let Some(true) = wait {
-        do_the_deed(docker, container, image, pull).await?;
+    // use the provided image, or try to access the containers image from the docker api
+    let image = image
+        .or_else(|| inspect.config.and_then(|config| config.image))
+        .ok_or(AutodokError::Input(ImageParseError::EmptyImage))?;
+
+    if wait.unwrap_or(false) {
+        do_the_deed(docker, container, image.clone(), pull).await?;
     } else {
         tokio::spawn({
             let docker = docker.clone();
             let container = container.to_string();
-            let image = image.to_string();
+            let image = image.clone();
             async move {
-                do_the_deed(&docker, &container, &image, pull).await.unwrap();
+                do_the_deed(&docker, &container, image, pull).await.unwrap();
             }
         });
     }
-    Ok(())
+    Ok(image)
 }
 
 async fn do_the_deed(
     docker: &Docker,
     container: &str,
-    image: &str,
+    image: String,
     pull: Option<bool>,
 ) -> Result<(), AutodokError> {
     if let Some(true) = pull {
@@ -77,7 +82,9 @@ async fn stop_start_container(
     // stop and remove old container
     info!("  Restarting container...");
     docker.stop_container(&container, None).await?;
-    docker.remove_container(&container, None).await?;
+    if docker.inspect_container(&container, None).await.is_ok() {
+        docker.remove_container(&container, None).await?;
+    }
 
     // build general options for new container
     let create_options = Some(CreateContainerOptions {

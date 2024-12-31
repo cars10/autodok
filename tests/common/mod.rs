@@ -20,7 +20,7 @@ pub async fn setup_docker() -> Result<Docker, bollard::errors::Error> {
     let docker = connect_docker().await;
     docker.ping().await?;
 
-    stop_all(&docker).await?;
+    stop_and_remove_all(&docker).await?;
     start_registry(&docker).await?;
     Ok(docker)
 }
@@ -180,7 +180,7 @@ pub async fn start_container(docker: &Docker) -> Result<(), bollard::errors::Err
     Ok(())
 }
 
-pub async fn stop_all(docker: &Docker) -> Result<(), bollard::errors::Error> {
+pub async fn stop_and_remove_all(docker: &Docker) -> Result<(), bollard::errors::Error> {
     let filters: HashMap<String, Vec<String>> = HashMap::new();
     let containers = docker
         .list_containers(Some(ListContainersOptions {

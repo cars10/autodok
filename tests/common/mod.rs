@@ -41,55 +41,75 @@ pub async fn build_and_start_container(
     docker: &Docker,
     message: &str,
 ) -> Result<(), bollard::errors::Error> {
-    build_image(&docker, message).await?;
-    start_container(&docker).await?;
+    let mut build_args = HashMap::new();
+    build_args.insert("MESSAGE", message);
 
+    build_image(
+        docker,
+        Some(build_args),
+        "localhost:5000/python_server",
+        "latest",
+        "tests/Dockerfile.python",
+    )
+    .await?;
+    start_container(
+        docker,
+        "python_server",
+        "localhost:5000/python_server:latest",
+        8000,
+    )
+    .await?;
     Ok(())
 }
 
-pub async fn build_image(docker: &Docker, message: &str) -> Result<(), bollard::errors::Error> {
-    let mut buildargs = std::collections::HashMap::new();
-    buildargs.insert("MESSAGE", message);
+async fn build_image(
+    docker: &Docker,
+    build_args: Option<HashMap<&str, &str>>,
+    image_name: &str,
+    image_tag: &str,
+    dockerfile_path: &str,
+) -> Result<(), bollard::errors::Error> {
+    let build_args = build_args.unwrap_or_default();
 
-    let dockerfile_path = "tests/Dockerfile.python";
-
-    let mut dockerfile = File::open(dockerfile_path).unwrap();
-    let dockerfile_size = dockerfile.metadata()?.len();
-
-    let mut tar = tar::Builder::new(Vec::new());
-    let mut header = tar::Header::new_gnu();
-    header.set_path(dockerfile_path).unwrap();
-    header.set_size(dockerfile_size);
-    header.set_mode(0o755);
-    header.set_cksum();
-    tar.append(&header, &mut dockerfile).unwrap();
+    let tar = create_dockerfile_tar(dockerfile_path).await?;
 
     let build_options = BuildImageOptions {
         dockerfile: dockerfile_path,
-        buildargs,
-        t: "localhost:5000/python_server:latest",
+        buildargs: build_args,
+        t: &format!("{image_name}:{image_tag}"),
         rm: true,
         ..Default::default()
     };
 
-    let mut image_build_stream = docker.build_image(
-        build_options,
-        None,
-        Some(bytes::Bytes::from(tar.into_inner().unwrap())),
-    );
+    let mut image_build_stream =
+        docker.build_image(build_options, None, Some(bytes::Bytes::from(tar)));
 
     while let Some(res) = image_build_stream.next().await {
         res?;
     }
 
-    let push_options = Some(PushImageOptions { tag: "latest" });
-
-    let mut push_stream = docker.push_image("localhost:5000/python_server", push_options, None);
+    let push_options = Some(PushImageOptions { tag: image_tag });
+    let mut push_stream = docker.push_image(image_name, push_options, None);
     while let Some(res) = push_stream.next().await {
         res?;
     }
 
     Ok(())
+}
+
+async fn create_dockerfile_tar(dockerfile_path: &str) -> Result<Vec<u8>, std::io::Error> {
+    let mut dockerfile = File::open(dockerfile_path)?;
+    let dockerfile_size = dockerfile.metadata()?.len();
+
+    let mut tar = tar::Builder::new(Vec::new());
+    let mut header = tar::Header::new_gnu();
+    header.set_path(dockerfile_path)?;
+    header.set_size(dockerfile_size);
+    header.set_mode(0o755);
+    header.set_cksum();
+    tar.append(&header, &mut dockerfile)?;
+
+    Ok(tar.into_inner()?)
 }
 
 async fn start_registry(docker: &Docker) -> Result<(), bollard::errors::Error> {
@@ -103,16 +123,20 @@ async fn start_registry(docker: &Docker) -> Result<(), bollard::errors::Error> {
         msg?;
     }
 
-    let mut port_bindings = HashMap::new();
-    port_bindings.insert(
-        "5000/tcp".to_string(),
-        Some(vec![PortBinding {
-            host_ip: Some("0.0.0.0".to_string()),
-            host_port: Some("5000".to_string()),
-        }]),
-    );
+    start_container(docker, "registry", "registry:2", 5000).await?;
+    Ok(())
+}
+
+pub async fn start_container(
+    docker: &Docker,
+    container_name: &str,
+    image: &str,
+    port: u16,
+) -> Result<(), bollard::errors::Error> {
+    let port_bindings = create_port_bindings(port);
+
     let config = container::Config {
-        image: Some("registry:2"),
+        image: Some(image),
         host_config: Some(HostConfig {
             port_bindings: Some(port_bindings),
             ..Default::default()
@@ -120,7 +144,6 @@ async fn start_registry(docker: &Docker) -> Result<(), bollard::errors::Error> {
         ..Default::default()
     };
 
-    let container_name = "registry";
     docker
         .create_container(
             Some(container::CreateContainerOptions {
@@ -141,46 +164,19 @@ async fn start_registry(docker: &Docker) -> Result<(), bollard::errors::Error> {
     Ok(())
 }
 
-pub async fn start_container(docker: &Docker) -> Result<(), bollard::errors::Error> {
+fn create_port_bindings(port: u16) -> HashMap<String, Option<Vec<PortBinding>>> {
     let mut port_bindings = HashMap::new();
     port_bindings.insert(
-        "8000/tcp".to_string(),
+        format!("{port}/tcp"),
         Some(vec![PortBinding {
             host_ip: Some("0.0.0.0".to_string()),
-            host_port: Some("8000".to_string()),
+            host_port: Some(port.to_string()),
         }]),
     );
-    let config = container::Config {
-        image: Some("localhost:5000/python_server:latest"),
-        host_config: Some(HostConfig {
-            port_bindings: Some(port_bindings),
-            ..Default::default()
-        }),
-        ..Default::default()
-    };
-
-    let container_name = "python_server";
-    docker
-        .create_container(
-            Some(container::CreateContainerOptions {
-                name: container_name,
-                ..Default::default()
-            }),
-            config,
-        )
-        .await?;
-
-    docker
-        .start_container(
-            container_name,
-            None::<container::StartContainerOptions<String>>,
-        )
-        .await?;
-
-    Ok(())
+    port_bindings
 }
 
-pub async fn stop_and_remove_all(docker: &Docker) -> Result<(), bollard::errors::Error> {
+async fn stop_and_remove_all(docker: &Docker) -> Result<(), bollard::errors::Error> {
     let filters: HashMap<String, Vec<String>> = HashMap::new();
     let containers = docker
         .list_containers(Some(ListContainersOptions {

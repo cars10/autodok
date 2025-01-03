@@ -5,7 +5,7 @@ mod helpers;
 struct AutodokTest {
     docker: bollard::Docker,
     random: String,
-    client: reqwest::Client
+    client: reqwest::Client,
 }
 
 impl AutodokTest {
@@ -17,10 +17,13 @@ impl AutodokTest {
             .await
             .unwrap();
 
-            let client = reqwest::Client::new();
+        let client = reqwest::Client::new();
 
-
-        AutodokTest { docker, random, client }
+        AutodokTest {
+            docker,
+            random,
+            client,
+        }
     }
 
     pub async fn send<T>(&self, path: &str, payload: T)
@@ -40,11 +43,12 @@ impl AutodokTest {
     }
 
     pub async fn check_random(&self) {
-        let response = self.client
-        .get("http://docker_server:8000/index.txt")
-        .send()
-        .await
-        .unwrap();
+        let response = self
+            .client
+            .get("http://docker_server:8000/index.txt")
+            .send()
+            .await
+            .unwrap();
 
         assert_eq!(self.random, response.text().await.unwrap().trim());
     }

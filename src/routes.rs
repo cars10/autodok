@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::docker;
 use crate::error::AutodokError;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct UpdateContainerParams {
     pub container: String,
     pub wait: Option<bool>,

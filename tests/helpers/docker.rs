@@ -1,5 +1,6 @@
 use bollard::container::{
-    self, InspectContainerOptions, ListContainersOptions, RemoveContainerOptions, StopContainerOptions
+    self, InspectContainerOptions, ListContainersOptions, RemoveContainerOptions,
+    StopContainerOptions,
 };
 use bollard::image::{CreateImageOptions, PushImageOptions};
 use bollard::secret::{HealthConfig, HealthStatusEnum, HostConfig, PortBinding};
@@ -221,12 +222,16 @@ async fn stop_and_remove_all(docker: &Docker) -> Result<(), bollard::errors::Err
     Ok(())
 }
 
-pub async fn wait_for_container(docker: &Docker, container: &str, timeout: Option<Duration>) -> Result<(), bollard::errors::Error> {
+pub async fn wait_for_container(
+    docker: &Docker,
+    container: &str,
+    timeout: Option<Duration>,
+) -> Result<(), bollard::errors::Error> {
     let start_time = Instant::now();
 
     loop {
         if start_time.elapsed() > timeout.unwrap_or(Duration::from_secs(10)) {
-            return Err(bollard::errors::Error::RequestTimeoutError)
+            return Err(bollard::errors::Error::RequestTimeoutError);
         }
 
         let container_info = docker
@@ -240,7 +245,7 @@ pub async fn wait_for_container(docker: &Docker, container: &str, timeout: Optio
                 }
             }
         }
-            
+
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
 }

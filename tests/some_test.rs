@@ -1,14 +1,12 @@
-use core::time;
-
-mod common;
+mod helpers;
 
 #[tokio::test]
 async fn test_it() {
-    common::run_server().await;
-    let docker = common::setup_docker().await.unwrap();
+    helpers::docker::run_server().await;
+    let docker = helpers::docker::setup_docker().await.unwrap();
     let random = autodok::random::random_string(32);
 
-    common::build_and_start_container(&docker, &random)
+    helpers::docker::build_and_start_container(&docker, &random)
         .await
         .unwrap();
 
@@ -30,7 +28,7 @@ async fn test_it() {
         .await
         .unwrap();
 
-    std::thread::sleep(time::Duration::from_secs(3));
+    helpers::docker::wait_for_container(&docker, &params.container, None).await.unwrap();
     let a = client
         .get("http://docker_server:8000/index.txt")
         .send()

@@ -1,13 +1,14 @@
 use bollard::container::{
-    self, ListContainersOptions, RemoveContainerOptions, StopContainerOptions,
+    self, InspectContainerOptions, ListContainersOptions, RemoveContainerOptions, StopContainerOptions
 };
 use bollard::image::{CreateImageOptions, PushImageOptions};
-use bollard::secret::{HostConfig, PortBinding};
+use bollard::secret::{HealthConfig, HealthStatusEnum, HostConfig, PortBinding};
 use bollard::{image::BuildImageOptions, Docker};
 use futures_util::stream::StreamExt;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 pub async fn run_server() {
     let config = autodok::config::Config::new();
@@ -135,12 +136,25 @@ pub async fn start_container(
 ) -> Result<(), bollard::errors::Error> {
     let port_bindings = create_port_bindings(port);
 
+    let healthcheck = HealthConfig {
+        test: Some(vec![
+            "CMD-SHELL".to_string(),
+            format!("wget --spider -q http://0.0.0.0:{port} || exit 1"),
+        ]),
+        start_interval: Some(0),
+        interval: Some(5_000_000_000), // 5 seconds in nanoseconds
+        timeout: Some(3_000_000_000),  // 3 seconds in nanoseconds
+        retries: Some(3),
+        start_period: Some(5_000_000_000), // 5 seconds in nanoseconds
+    };
+
     let config = container::Config {
         image: Some(image),
         host_config: Some(HostConfig {
             port_bindings: Some(port_bindings),
             ..Default::default()
         }),
+        healthcheck: Some(healthcheck),
         ..Default::default()
     };
 
@@ -205,4 +219,28 @@ async fn stop_and_remove_all(docker: &Docker) -> Result<(), bollard::errors::Err
     }
 
     Ok(())
+}
+
+pub async fn wait_for_container(docker: &Docker, container: &str, timeout: Option<Duration>) -> Result<(), bollard::errors::Error> {
+    let start_time = Instant::now();
+
+    loop {
+        if start_time.elapsed() > timeout.unwrap_or(Duration::from_secs(10)) {
+            return Err(bollard::errors::Error::RequestTimeoutError)
+        }
+
+        let container_info = docker
+            .inspect_container(container, None::<InspectContainerOptions>)
+            .await?;
+
+        if let Some(state) = container_info.state {
+            if let Some(health) = state.health {
+                if let Some(HealthStatusEnum::HEALTHY) = health.status {
+                    return Ok(());
+                }
+            }
+        }
+            
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
 }

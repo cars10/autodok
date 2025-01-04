@@ -15,7 +15,6 @@ pub async fn pull_image_and_update_container(
     docker: &Docker,
     container: &str,
     image: Option<String>,
-    wait: Option<bool>,
     pull: Option<bool>,
 ) -> Result<String, AutodokError> {
     let inspect = docker.inspect_container(container, None).await?;
@@ -25,18 +24,14 @@ pub async fn pull_image_and_update_container(
         .or_else(|| inspect.config.and_then(|config| config.image))
         .ok_or(AutodokError::Input(ImageParseError::EmptyImage))?;
 
-    if wait.unwrap_or(false) {
-        do_the_deed(docker, container, image.clone(), pull).await?;
-    } else {
-        tokio::spawn({
-            let docker = docker.clone();
-            let container = container.to_string();
-            let image = image.clone();
-            async move {
-                do_the_deed(&docker, &container, image, pull).await.unwrap();
-            }
-        });
-    }
+    tokio::spawn({
+        let docker = docker.clone();
+        let container = container.to_string();
+        let image = image.clone();
+        async move {
+            do_the_deed(&docker, &container, image, pull).await.unwrap();
+        }
+    });
     Ok(image)
 }
 

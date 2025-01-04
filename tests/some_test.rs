@@ -103,7 +103,6 @@ async fn test_it() {
     let test = AutodokTest::new().await;
     let payload = autodok::routes::UpdateContainerParams {
         container: format!("python_server_{}", test.random),
-        wait: Some(true),
         pull: None,
     };
     test.send("update_container", payload.clone()).await;

@@ -18,9 +18,7 @@ prod: docker_build docker_push
 
 ### Tests
 
-test: _start_test_docker_server _build_test
-	docker compose -f compose.test.yml run --rm test bash -c "touch src/main.rs && cargo test -- --nocapture"
-	test_down
+test: _start_test_docker_server _build_test _run_test test_down
 
 test_down:
 	docker compose -f compose.test.yml down -v -t 1
@@ -36,3 +34,6 @@ _start_test_docker_server:
 
 _build_test:
 	docker compose -f compose.test.yml build test
+
+_run_test:
+	docker compose -f compose.test.yml run --rm test bash -c "touch src/main.rs && cargo test -- --nocapture"

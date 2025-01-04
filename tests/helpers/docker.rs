@@ -18,12 +18,11 @@ pub async fn run_server() {
     });
 }
 
-pub async fn setup_docker() -> Result<Docker, bollard::errors::Error> {
+pub async fn setup_docker(random: &str) -> Result<Docker, bollard::errors::Error> {
     let docker = connect_docker().await;
     docker.ping().await?;
 
-    stop_and_remove_all(&docker).await?;
-    start_registry(&docker).await?;
+    start_registry(&docker, random).await?;
     Ok(docker)
 }
 
@@ -41,24 +40,25 @@ async fn connect_docker() -> Docker {
 
 pub async fn build_and_start_container(
     docker: &Docker,
-    message: &str,
+    random: &str,
 ) -> Result<(), bollard::errors::Error> {
     let mut build_args = HashMap::new();
-    build_args.insert("MESSAGE", message);
+    build_args.insert("MESSAGE", random);
 
     build_image(
         docker,
         Some(build_args),
         "localhost:5000/python_server",
-        "latest",
+        random,
         "tests/Dockerfile.python",
     )
     .await?;
     start_container(
         docker,
-        "python_server",
-        "localhost:5000/python_server:latest",
+        &format!("python_server_{}", random),
+        &format!("localhost:5000/python_server:{}", random),
         8000,
+        random,
     )
     .await?;
     Ok(())
@@ -114,7 +114,7 @@ async fn create_dockerfile_tar(dockerfile_path: &str) -> Result<Vec<u8>, std::io
     Ok(tar.into_inner()?)
 }
 
-async fn start_registry(docker: &Docker) -> Result<(), bollard::errors::Error> {
+async fn start_registry(docker: &Docker, random: &str) -> Result<(), bollard::errors::Error> {
     let pull_options = CreateImageOptions {
         from_image: "registry:2",
         ..Default::default()
@@ -125,7 +125,14 @@ async fn start_registry(docker: &Docker) -> Result<(), bollard::errors::Error> {
         msg?;
     }
 
-    start_container(docker, "registry", "registry:2", 5000).await?;
+    start_container(
+        docker,
+        &format!("registry_{}", random),
+        "registry:2",
+        5000,
+        random,
+    )
+    .await?;
     Ok(())
 }
 
@@ -134,6 +141,7 @@ pub async fn start_container(
     container_name: &str,
     image: &str,
     port: u16,
+    random: &str,
 ) -> Result<(), bollard::errors::Error> {
     let port_bindings = create_port_bindings(port);
 
@@ -149,6 +157,9 @@ pub async fn start_container(
         start_period: Some(5_000_000_000), // 5 seconds in nanoseconds
     };
 
+    let mut labels = HashMap::new();
+    labels.insert("AUTODOK_RANDOM_STRING", random);
+
     let config = container::Config {
         image: Some(image),
         host_config: Some(HostConfig {
@@ -156,6 +167,7 @@ pub async fn start_container(
             ..Default::default()
         }),
         healthcheck: Some(healthcheck),
+        labels: Some(labels),
         ..Default::default()
     };
 
@@ -189,37 +201,6 @@ fn create_port_bindings(port: u16) -> HashMap<String, Option<Vec<PortBinding>>> 
         }]),
     );
     port_bindings
-}
-
-async fn stop_and_remove_all(docker: &Docker) -> Result<(), bollard::errors::Error> {
-    let filters: HashMap<String, Vec<String>> = HashMap::new();
-    let containers = docker
-        .list_containers(Some(ListContainersOptions {
-            all: true,
-            filters,
-            ..Default::default()
-        }))
-        .await?;
-
-    for container in containers {
-        if let Some(container_id) = &container.id {
-            docker
-                .stop_container(container_id, Some(StopContainerOptions { t: 1 }))
-                .await?;
-
-            docker
-                .remove_container(
-                    container_id,
-                    Some(RemoveContainerOptions {
-                        force: true,
-                        ..Default::default()
-                    }),
-                )
-                .await?;
-        }
-    }
-
-    Ok(())
 }
 
 pub async fn wait_for_container(

@@ -1,11 +1,9 @@
 use crate::error::AutodokError;
 use bollard::{
-    container::{Config, CreateContainerOptions, NetworkingConfig, StartContainerOptions},
-    image::CreateImageOptions,
-    models::ContainerConfig,
-    network::ConnectNetworkOptions,
-    service::CreateImageInfo,
     Docker,
+    models::{ContainerCreateBody, CreateImageInfo},
+    query_parameters::{CreateContainerOptions, CreateImageOptions, StartContainerOptions},
+    secret::ContainerConfig,
 };
 use futures_util::stream::StreamExt;
 use log::debug;
@@ -13,7 +11,7 @@ use std::collections::HashMap;
 
 pub async fn pull_image(docker: &Docker, image: String) -> Result<(), AutodokError> {
     let options = Some(CreateImageOptions {
-        from_image: image.clone(),
+        from_image: Some(image.clone()),
         ..Default::default()
     });
 
@@ -38,10 +36,10 @@ pub async fn stop_start_container(
     docker.stop_container(&container, None).await?;
     docker.remove_container(&container, None).await?;
 
-    // build general options for new container
+    // build general options for new container (platform is String in 0.20 API)
     let create_options = Some(CreateContainerOptions {
-        name: container.clone(),
-        platform: info.platform,
+        name: Some(container.clone()),
+        platform: info.platform.unwrap_or_default(),
     });
 
     let container_config = ContainerConfig {
@@ -57,24 +55,50 @@ pub async fn stop_start_container(
     let mut endpoints_config = HashMap::new();
     endpoints_config.insert(default_network_name, default_network);
 
-    let network_config = NetworkingConfig { endpoints_config };
-
-    let mut config = Config::from(container_config);
-    config.host_config = info.host_config;
-    config.networking_config = Some(network_config);
+    // ContainerCreateBody has the same config fields as ContainerConfig plus host_config and networking_config
+    let config = ContainerCreateBody {
+        hostname: container_config.hostname,
+        domainname: container_config.domainname,
+        user: container_config.user,
+        attach_stdin: container_config.attach_stdin,
+        attach_stdout: container_config.attach_stdout,
+        attach_stderr: container_config.attach_stderr,
+        exposed_ports: container_config.exposed_ports,
+        tty: container_config.tty,
+        open_stdin: container_config.open_stdin,
+        stdin_once: container_config.stdin_once,
+        env: container_config.env,
+        cmd: container_config.cmd,
+        healthcheck: container_config.healthcheck,
+        args_escaped: container_config.args_escaped,
+        image: container_config.image,
+        volumes: container_config.volumes,
+        working_dir: container_config.working_dir,
+        entrypoint: container_config.entrypoint,
+        network_disabled: container_config.network_disabled,
+        on_build: container_config.on_build,
+        labels: container_config.labels,
+        stop_signal: container_config.stop_signal,
+        stop_timeout: container_config.stop_timeout,
+        shell: container_config.shell,
+        host_config: info.host_config,
+        networking_config: Some(bollard::models::NetworkingConfig {
+            endpoints_config: Some(endpoints_config),
+        }),
+    };
 
     docker.create_container(create_options, config).await?;
 
     for (network_name, endpoint_config) in previous_networks {
-        let config = ConnectNetworkOptions {
-            container: &container,
-            endpoint_config,
+        let config = bollard::secret::NetworkConnectRequest {
+            container: container.clone(),
+            endpoint_config: Some(endpoint_config),
         };
         docker.connect_network(&network_name, config).await.unwrap();
     }
 
     docker
-        .start_container(&container, None::<StartContainerOptions<String>>)
+        .start_container(&container, None::<StartContainerOptions>)
         .await?;
 
     Ok(())

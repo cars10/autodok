@@ -1,19 +1,19 @@
+use axum::{Router, routing::get, routing::post};
 use axum::{
     extract::{Request, State},
     http::StatusCode,
     middleware::{self, Next},
     response::Response,
 };
-use axum::{routing::get, routing::post, Router};
-use bollard::errors::Error as BolladError;
 use bollard::Docker;
+use bollard::errors::Error as BolladError;
 use error::AutodokError;
 use lazy_static::lazy_static;
 
 use std::time::Duration;
 use tower_http::classify::ServerErrorsFailureClass;
 use tower_http::trace::TraceLayer;
-use tracing::{info_span, Span};
+use tracing::{Span, info_span};
 
 mod api_key;
 mod credentials;

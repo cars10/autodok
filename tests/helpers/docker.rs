@@ -9,20 +9,70 @@ use futures_util::stream::StreamExt;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
+use std::sync::Once;
 use std::time::{Duration, Instant};
 
+static START_SERVER: Once = Once::new();
+
 pub async fn run_server() {
-    let config = autodok::config::Config::new();
-    tokio::spawn(async move {
-        autodok::run(&config).await.unwrap();
+    START_SERVER.call_once(|| {
+        tokio::spawn(async move {
+            let config = autodok::config::Config::new();
+            autodok::run(&config).await.unwrap();
+        });
     });
 }
 
-pub async fn setup_docker(random: &str) -> Result<Docker, bollard::errors::Error> {
+pub async fn cleanup_containers(
+    docker: &Docker,
+    random: &str,
+) -> Result<(), bollard::errors::Error> {
+    let filters = {
+        let mut filters = HashMap::new();
+        filters.insert(
+            "label".to_string(),
+            vec![format!("AUTODOK_RANDOM_STRING={}", random)],
+        );
+        filters
+    };
+
+    let containers = docker
+        .list_containers(Some(ListContainersOptions {
+            all: true,
+            filters,
+            ..Default::default()
+        }))
+        .await?;
+
+    for container in containers {
+        if let Some(container_id) = &container.id {
+            docker
+                .stop_container(container_id, Some(StopContainerOptions { t: 1 }))
+                .await?;
+
+            docker
+                .remove_container(
+                    container_id,
+                    Some(RemoveContainerOptions {
+                        force: true,
+                        ..Default::default()
+                    }),
+                )
+                .await?;
+        }
+    }
+
+    Ok(())
+}
+
+pub async fn setup_docker(
+    random: &str,
+    registry_host_port: u16,
+) -> Result<Docker, bollard::errors::Error> {
     let docker = connect_docker().await;
     docker.ping().await?;
 
-    start_registry(&docker, random).await?;
+    start_registry(&docker, random, registry_host_port).await?;
     Ok(docker)
 }
 
@@ -41,6 +91,8 @@ async fn connect_docker() -> Docker {
 pub async fn build_and_start_container(
     docker: &Docker,
     random: &str,
+    app_host_port: u16,
+    registry_host_port: u16,
 ) -> Result<(), bollard::errors::Error> {
     let mut build_args = HashMap::new();
     build_args.insert("MESSAGE", random);
@@ -48,7 +100,7 @@ pub async fn build_and_start_container(
     build_image(
         docker,
         Some(build_args),
-        "localhost:5000/python_server",
+        &format!("localhost:{registry_host_port}/python_server"),
         random,
         "tests/Dockerfile.python",
     )
@@ -56,15 +108,16 @@ pub async fn build_and_start_container(
     start_container(
         docker,
         &format!("python_server_{}", random),
-        &format!("localhost:5000/python_server:{}", random),
+        &format!("localhost:{registry_host_port}/python_server:{}", random),
         8000,
+        app_host_port,
         random,
     )
     .await?;
     Ok(())
 }
 
-async fn build_image(
+pub async fn build_image(
     docker: &Docker,
     build_args: Option<HashMap<&str, &str>>,
     image_name: &str,
@@ -114,7 +167,11 @@ async fn create_dockerfile_tar(dockerfile_path: &str) -> Result<Vec<u8>, std::io
     Ok(tar.into_inner()?)
 }
 
-async fn start_registry(docker: &Docker, random: &str) -> Result<(), bollard::errors::Error> {
+async fn start_registry(
+    docker: &Docker,
+    random: &str,
+    registry_host_port: u16,
+) -> Result<(), bollard::errors::Error> {
     let pull_options = CreateImageOptions {
         from_image: "registry:2",
         ..Default::default()
@@ -130,6 +187,7 @@ async fn start_registry(docker: &Docker, random: &str) -> Result<(), bollard::er
         &format!("registry_{}", random),
         "registry:2",
         5000,
+        registry_host_port,
         random,
     )
     .await?;
@@ -140,15 +198,16 @@ pub async fn start_container(
     docker: &Docker,
     container_name: &str,
     image: &str,
-    port: u16,
+    container_port: u16,
+    host_port: u16,
     random: &str,
 ) -> Result<(), bollard::errors::Error> {
-    let port_bindings = create_port_bindings(port);
+    let port_bindings = create_port_bindings(container_port, host_port);
 
     let healthcheck = HealthConfig {
         test: Some(vec![
             "CMD-SHELL".to_string(),
-            format!("wget --spider -q http://0.0.0.0:{port} || exit 1"),
+            format!("wget --spider -q http://0.0.0.0:{container_port} || exit 1"),
         ]),
         start_interval: Some(0),
         interval: Some(5_000_000_000), // 5 seconds in nanoseconds
@@ -191,13 +250,16 @@ pub async fn start_container(
     Ok(())
 }
 
-fn create_port_bindings(port: u16) -> HashMap<String, Option<Vec<PortBinding>>> {
+fn create_port_bindings(
+    container_port: u16,
+    host_port: u16,
+) -> HashMap<String, Option<Vec<PortBinding>>> {
     let mut port_bindings = HashMap::new();
     port_bindings.insert(
-        format!("{port}/tcp"),
+        format!("{container_port}/tcp"),
         Some(vec![PortBinding {
             host_ip: Some("0.0.0.0".to_string()),
-            host_port: Some(port.to_string()),
+            host_port: Some(host_port.to_string()),
         }]),
     );
     port_bindings

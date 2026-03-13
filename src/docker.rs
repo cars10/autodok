@@ -8,7 +8,7 @@ use bollard::{
     Docker,
 };
 use futures_util::stream::StreamExt;
-use log::{debug, info};
+use log::{debug, error, info};
 use std::collections::HashMap;
 
 pub async fn pull_image_and_update_container(
@@ -29,7 +29,9 @@ pub async fn pull_image_and_update_container(
         let container = container.to_string();
         let image = image.clone();
         async move {
-            do_the_deed(&docker, &container, image, pull).await.unwrap();
+            if let Err(e) = do_the_deed(&docker, &container, image, pull).await {
+                error!("failed to update container '{container}': {e}");
+            }
         }
     });
     Ok(image)

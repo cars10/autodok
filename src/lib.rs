@@ -59,7 +59,7 @@ pub async fn run(config: &Config) -> Result<(), AutodokError> {
 
     let app = Router::new()
         .route("/update_container", post(routes::update_container))
-        .route("/update_image", post(routes::update_container))
+        .route("/update_image", post(routes::update_image))
         .route_layer(middleware::from_fn_with_state(API_KEY.to_string(), auth))
         .route("/health", get(routes::health))
         .with_state(docker)

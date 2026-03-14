@@ -1,7 +1,4 @@
-use bollard::container::{
-    self, InspectContainerOptions, ListContainersOptions, RemoveContainerOptions,
-    StopContainerOptions,
-};
+use bollard::container::{self, InspectContainerOptions};
 use bollard::image::{CreateImageOptions, PushImageOptions};
 use bollard::secret::{HealthConfig, HealthStatusEnum, HostConfig, PortBinding};
 use bollard::{image::BuildImageOptions, Docker};
@@ -9,60 +6,16 @@ use futures_util::stream::StreamExt;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::Path;
-use std::sync::Once;
 use std::time::{Duration, Instant};
 
-static START_SERVER: Once = Once::new();
-
-pub async fn run_server() {
-    START_SERVER.call_once(|| {
-        tokio::spawn(async move {
-            let config = autodok::config::Config::new();
-            autodok::run(&config).await.unwrap();
-        });
+pub async fn run_server(port: u16) {
+    tokio::spawn(async move {
+        let config = autodok::config::Config {
+            host: "0.0.0.0".to_string(),
+            port: port.to_string(),
+        };
+        autodok::run(&config).await.unwrap();
     });
-}
-
-pub async fn cleanup_containers(
-    docker: &Docker,
-    random: &str,
-) -> Result<(), bollard::errors::Error> {
-    let filters = {
-        let mut filters = HashMap::new();
-        filters.insert(
-            "label".to_string(),
-            vec![format!("AUTODOK_RANDOM_STRING={}", random)],
-        );
-        filters
-    };
-
-    let containers = docker
-        .list_containers(Some(ListContainersOptions {
-            all: true,
-            filters,
-            ..Default::default()
-        }))
-        .await?;
-
-    for container in containers {
-        if let Some(container_id) = &container.id {
-            docker
-                .stop_container(container_id, Some(StopContainerOptions { t: 1 }))
-                .await?;
-
-            docker
-                .remove_container(
-                    container_id,
-                    Some(RemoveContainerOptions {
-                        force: true,
-                        ..Default::default()
-                    }),
-                )
-                .await?;
-        }
-    }
-
-    Ok(())
 }
 
 pub async fn setup_docker(
@@ -291,4 +244,18 @@ pub async fn wait_for_container(
 
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
+}
+
+pub async fn container_image_id(
+    docker: &Docker,
+    container: &str,
+) -> Result<String, bollard::errors::Error> {
+    let info = docker
+        .inspect_container(container, None::<InspectContainerOptions>)
+        .await?;
+
+    let image_ref = info.image.unwrap_or_default();
+    let image = docker.inspect_image(&image_ref).await?;
+
+    Ok(image.id.unwrap_or_default())
 }

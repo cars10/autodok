@@ -8,7 +8,7 @@ use bollard::{
     Docker,
 };
 use futures_util::stream::StreamExt;
-use log::{debug, error, info};
+use log::{debug, info};
 use std::collections::HashMap;
 
 pub async fn pull_image_and_update_container(
@@ -24,16 +24,7 @@ pub async fn pull_image_and_update_container(
         .or_else(|| inspect.config.and_then(|config| config.image))
         .ok_or(AutodokError::Input(ImageParseError::EmptyImage))?;
 
-    tokio::spawn({
-        let docker = docker.clone();
-        let container = container.to_string();
-        let image = image.clone();
-        async move {
-            if let Err(e) = do_the_deed(&docker, &container, image, pull).await {
-                error!("failed to update container '{container}': {e}");
-            }
-        }
-    });
+    do_the_deed(docker, container, image.clone(), pull).await?;
     Ok(image)
 }
 

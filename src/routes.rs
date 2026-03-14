@@ -15,6 +15,7 @@ use crate::parse;
 pub struct UpdateContainerParams {
     pub container: String,
     pub pull: Option<bool>,
+    pub wait_for_completion: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -33,6 +34,7 @@ impl UpdateContainerResponse {
 pub struct UpdateImageParams {
     pub previous_image: Option<String>,
     pub image: String,
+    pub wait_for_completion: Option<bool>,
 }
 
 #[derive(Debug, Serialize)]
@@ -50,18 +52,40 @@ pub async fn update_container(
     State(docker): State<Docker>,
     extract::Json(payload): extract::Json<UpdateContainerParams>,
 ) -> Result<Response, AutodokError> {
-    let image =
-        docker::pull_image_and_update_container(&docker, &payload.container, None, payload.pull)
-            .await?;
+    let wait_for_completion = payload.wait_for_completion.unwrap_or(false);
 
-    let resp = UpdateContainerResponse::new(payload.container, image);
-    Ok((StatusCode::OK, Json(resp)).into_response())
+    if wait_for_completion {
+        let image = docker::pull_image_and_update_container(
+            &docker,
+            &payload.container,
+            None,
+            payload.pull,
+        )
+        .await?;
+
+        let resp = UpdateContainerResponse::new(payload.container, image);
+        Ok((StatusCode::OK, Json(resp)).into_response())
+    } else {
+        let docker = docker.clone();
+        let container = payload.container.clone();
+        let pull = payload.pull;
+
+        tokio::spawn(async move {
+            if let Err(err) =
+                docker::pull_image_and_update_container(&docker, &container, None, pull).await
+            {
+                eprintln!("failed to update container {container}: {err}");
+            }
+        });
+
+        Ok(StatusCode::NO_CONTENT.into_response())
+    }
 }
 
-pub async fn update_image(
-    State(docker): State<Docker>,
-    extract::Json(payload): extract::Json<UpdateImageParams>,
-) -> Result<Response, AutodokError> {
+async fn perform_update_image(
+    docker: Docker,
+    payload: UpdateImageParams,
+) -> Result<UpdateImageResponse, AutodokError> {
     let target_image = parse::parse_image_tag(payload.image)?;
     let previous_image = match payload.previous_image {
         Some(prev) => Some(parse::parse_image_tag(prev)?),
@@ -114,16 +138,40 @@ pub async fn update_image(
                 .await?
             }
             None => {
-                docker::pull_image_and_update_container(&docker, &container_name, None, Some(true))
-                    .await?
+                docker::pull_image_and_update_container(
+                    &docker,
+                    &container_name,
+                    Some(target_image.clone()),
+                    Some(true),
+                )
+                .await?
             }
         };
 
         updated.push(UpdateContainerResponse::new(container_name, image));
     }
 
-    let resp = UpdateImageResponse::new(updated);
-    Ok((StatusCode::OK, Json(resp)).into_response())
+    Ok(UpdateImageResponse::new(updated))
+}
+
+pub async fn update_image(
+    State(docker): State<Docker>,
+    extract::Json(payload): extract::Json<UpdateImageParams>,
+) -> Result<Response, AutodokError> {
+    let wait_for_completion = payload.wait_for_completion.unwrap_or(false);
+
+    if wait_for_completion {
+        let resp = perform_update_image(docker.clone(), payload).await?;
+        Ok((StatusCode::OK, Json(resp)).into_response())
+    } else {
+        tokio::spawn(async move {
+            if let Err(err) = perform_update_image(docker, payload).await {
+                eprintln!("failed to update image: {err}");
+            }
+        });
+
+        Ok(StatusCode::NO_CONTENT.into_response())
+    }
 }
 
 pub async fn health(State(docker): State<Docker>) -> Result<Response, AutodokError> {
